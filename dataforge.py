@@ -41,10 +41,21 @@ class Transformer:
 class InsightEngine:
     @staticmethod
     def generate_bi(df, domain="generic"):
-        # Domain-agnostic stats/chart
-        summary = df.describe()
-        fig = px.bar(summary.loc['mean'], title=f"{domain.title()} Insights")
-        return fig, f"Key Metric: Mean Value {summary.loc['mean'].mean():.2f}"
+        # Domain-agnostic stats/chart—robust to mixed data
+        numeric_df = df.select_dtypes(include=['number'])  # Filter numerics only (e.g., price)
+        if numeric_df.empty:
+            return px.bar(title=f"{domain.title()} Insights: No numeric data"), "Add numbers for stats!"
+        
+        summary = numeric_df.describe()
+        if 'mean' in summary.index:
+            mean_values = summary.loc['mean']
+            fig = px.bar(x=mean_values.index, y=mean_values.values, title=f"{domain.title()} Mean Insights")
+        else:
+            mean_values = numeric_df.mean()  # Fallback mean
+            fig = px.bar(x=mean_values.index, y=mean_values.values, title=f"{domain.title()} Mean Insights")
+        
+        avg_metric = mean_values.mean() if not mean_values.empty else 0
+        return fig, f"Key Metric: Avg Mean {avg_metric:.2f} (Numerics: {len(numeric_df.columns)} cols)"
 
 # App
 st.title("🔨 DataForge: Generic Unstructured to Real-Time BI")
@@ -85,5 +96,22 @@ if st.button("Process & Forge Insights"):
     
     st.header("4. Decision")
     st.success("Action: Review trends—stable for now.")
+    # Export Button
+    st.header("5. Export Insights")
+    csv = df.to_csv(index=False).encode('utf-8')  # Structured data as CSV
+    st.download_button(
+    label="Download Structured Data (CSV)",
+    data=csv,
+    file_name=f"{domain.replace(' ', '_')}_insights.csv",
+    mime='text/csv'
+    )
 
+# Optional: Export summary as text
+    summary_text = f"Domain: {domain}\n{summary}\n\nData Shape: {df.shape}"
+    st.download_button(
+    label="Download Summary (TXT)",
+    data=summary_text.encode('utf-8'),
+    file_name=f"{domain.replace(' ', '_')}_summary.txt",
+    mime='text/plain'
+    )
 st.info("Next: Customize per domain. GitHub: DataForge-MVP")
